@@ -10,6 +10,6 @@ python3 -m venv "$VENV_DIR"
 
 # Activate the virtual environment and install dependencies
 source "$VENV_DIR/bin/activate"
-pip install -r requirements.txt
+pip install -r ./working/razrabotat-model-raspoznavaniya-lic-ustojchivoj-k-atakam-s-ispolzovaniem-deepfake-6468/requirements.txt
 
 echo "Virtual environment setup complete. Use 'source $VENV_DIR/bin/activate' to activate it."

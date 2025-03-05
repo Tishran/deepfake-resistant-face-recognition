@@ -10,6 +10,8 @@ from oml.models import ViTExtractor
 from oml.registry import get_transforms_for_pretrained
 
 
+OUTPUT_PATH = "/kaggle/working/submissions"
+
 def create_sample_sub(pair_ids: List[str], sim_scores: List[float]):
     sub_sim_column = "similarity"
     id_column = "pair_id"
@@ -17,14 +19,14 @@ def create_sample_sub(pair_ids: List[str], sim_scores: List[float]):
 
 
 if __name__ == "__main__":
-    if not os.path.exists("data"):
-        os.makedirs("data")
+    if not os.path.exists(OUTPUT_PATH):
+        os.makedirs(OUTPUT_PATH)
 
-    device = "cpu"
+    device = "cuda"
     test_path = "test.csv"
 
     model = ViTExtractor.from_pretrained("vits16_dino")
-    state_dict = torch.load("model.pth", map_location="cpu")
+    state_dict = torch.load("model.pth", map_location="cuda")
     model.load_state_dict(state_dict)
     model = model.to(device).eval()
 
@@ -32,7 +34,7 @@ if __name__ == "__main__":
 
     df_test = pd.read_csv(test_path)
     test = d.ImageQueryGalleryLabeledDataset(df_test, transform=transform)
-    embeddings = inference(model, test, batch_size=32, num_workers=0, verbose=True)
+    embeddings = inference(model, test, batch_size=512, num_workers=1, verbose=True)
 
     e1 = embeddings[::2]
     e2 = embeddings[1::2]
@@ -42,4 +44,4 @@ if __name__ == "__main__":
     pair_ids = pair_ids[::2]
 
     sub_df = create_sample_sub(pair_ids, sim_scores)
-    sub_df.to_csv("data/submission.csv", index=False)
+    sub_df.to_csv(f"{OUTPUT_PATH}/submission.csv", index=False)
