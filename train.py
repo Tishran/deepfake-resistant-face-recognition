@@ -1,3 +1,4 @@
+import os
 import random
 import torch
 import numpy as np
@@ -16,8 +17,10 @@ from oml.registry import get_transforms_for_pretrained
 from oml.retrieval import RetrievalResults, AdaptiveThresholding
 from oml.samplers import BalanceSampler
 
-device = "cpu"
-epochs = 1
+MODEL_WEIGHTS_SAVE_PATH = "./model_weights/"
+
+device = "cuda"
+epochs = 5
 
 
 def fix_seed(seed: int):
@@ -30,10 +33,15 @@ def fix_seed(seed: int):
 
 
 if __name__ == "__main__":
-    fix_seed(seed=0)
+    fix_seed(seed=42)
 
-    model = ViTExtractor.from_pretrained("vits16_dino").to(device).train()
-    transform, _ = get_transforms_for_pretrained("vits16_dino")
+    model_name = "vits16_dino"
+    
+    if not os.path.exists(os.path.join(MODEL_WEIGHTS_SAVE_PATH, model_name)):
+        os.makedirs(os.path.join(MODEL_WEIGHTS_SAVE_PATH, model_name))
+
+    model = ViTExtractor.from_pretrained(model_name).to(device).train()
+    transform, _ = get_transforms_for_pretrained(model_name)
 
     df_train, df_val = pd.read_csv("train.csv"), pd.read_csv("val.csv")
     train = d.ImageLabeledDataset(df_train, transform=transform)
@@ -56,7 +64,7 @@ if __name__ == "__main__":
                 pbar.set_postfix(criterion.last_logs)
 
     def validation():
-        embeddings = inference(model, val, batch_size=32, num_workers=0, verbose=True)
+        embeddings = inference(model, val, batch_size=64, num_workers=0, verbose=True)
         rr = RetrievalResults.from_embeddings(embeddings, val, n_items=10)
         rr = AdaptiveThresholding(n_std=2).process(rr)
         rr.visualize(query_ids=[2, 1], dataset=val, show=True)
@@ -68,4 +76,7 @@ if __name__ == "__main__":
 
     training()
     validation()
-    torch.save(model.state_dict(), "model.pth")
+    torch.save(
+        model.state_dict(),
+        os.path.join(MODEL_WEIGHTS_SAVE_PATH, f"{model_name}/model.pth"),
+    )

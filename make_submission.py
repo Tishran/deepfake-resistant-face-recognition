@@ -6,7 +6,7 @@ from torch.nn import functional as F
 from oml import datasets as d
 from oml.inference import inference
 
-from oml.models import ViTExtractor
+from oml.models import ViTExtractor, ResnetExtractor
 from oml.registry import get_transforms_for_pretrained
 
 
@@ -25,13 +25,16 @@ if __name__ == "__main__":
 
     device = "cuda"
     test_path = "test.csv"
+    oml_registry_model_name = "vits16_dino"
 
-    model = ViTExtractor.from_pretrained("vits16_dino")
-    state_dict = torch.load("model.pth", map_location="cuda")
+    model = ViTExtractor.from_pretrained(oml_registry_model_name)
+    state_dict = torch.load(
+        "./model_weights/vits16_dino/model.pth", map_location="cuda"
+    )
     model.load_state_dict(state_dict)
     model = model.to(device).eval()
 
-    transform, _ = get_transforms_for_pretrained("vits16_dino")
+    transform, _ = get_transforms_for_pretrained(oml_registry_model_name)
 
     df_test = pd.read_csv(test_path)
     test = d.ImageQueryGalleryLabeledDataset(df_test, transform=transform)
