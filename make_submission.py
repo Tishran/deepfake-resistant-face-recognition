@@ -12,6 +12,7 @@ from oml.registry import get_transforms_for_pretrained
 
 OUTPUT_PATH = "/kaggle/working/submissions"
 
+
 def create_sample_sub(pair_ids: List[str], sim_scores: List[float]):
     sub_sim_column = "similarity"
     id_column = "pair_id"
@@ -34,7 +35,7 @@ if __name__ == "__main__":
 
     df_test = pd.read_csv(test_path)
     test = d.ImageQueryGalleryLabeledDataset(df_test, transform=transform)
-    embeddings = inference(model, test, batch_size=512, num_workers=1, verbose=True)
+    embeddings = inference(model, test, batch_size=1024, num_workers=3, verbose=True)
 
     e1 = embeddings[::2]
     e2 = embeddings[1::2]
