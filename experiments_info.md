@@ -10,4 +10,4 @@ OML lib seems interesing, gonna keep exploring it
 * vits16_dino - checking pretrained, do i need model.pth? got 0.35 on public, probably bad training of model.pth
 
 
-2. reorganized data (dropped rows that are unique in their classes)
+2. reorganized data (dropped rows that are unique in their classes) - it gave 0.0571 EER on public with resnet18_imagenet1k_v1

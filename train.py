@@ -3,6 +3,7 @@ import random
 import torch
 import numpy as np
 import pandas as pd
+import wandb
 from tqdm import tqdm
 from torch.optim import Adam
 from torch.utils.data import DataLoader
@@ -17,10 +18,18 @@ from oml.registry import get_transforms_for_pretrained
 from oml.retrieval import RetrievalResults, AdaptiveThresholding
 from oml.samplers import BalanceSampler
 
+from validation import (
+    print_metrics,
+    calc_metrics,
+    val_inference,
+    gen_query_gallery_pairs,
+    get_ground_truth,
+)
+
 MODEL_WEIGHTS_SAVE_PATH = "./model_weights/"
 
 device = "cuda"
-epochs = 3
+epochs = 1
 
 
 def fix_seed(seed: int):
@@ -33,6 +42,20 @@ def fix_seed(seed: int):
 
 
 if __name__ == "__main__":
+    # TODO: CLEAR THIS OFF, and for the next time turn on kaggle secrets
+    wandb_api_key = ""
+    wandb.login(key=wandb_api_key)
+
+    wandb.init(
+        project="Kryptonite_OML",
+        config={
+            "architecture": "resnet18_imagenet1k_v1",
+            "epochs": epochs,
+            "optimizer": "Adam",
+            "loss": "TripletLoss",
+        },
+    )
+
     fix_seed(seed=42)
 
     model_name = "resnet18_imagenet1k_v1"
@@ -43,10 +66,12 @@ if __name__ == "__main__":
     model = ResnetExtractor.from_pretrained(model_name).to(device).train()
     transform, _ = get_transforms_for_pretrained(model_name)
 
-    df_train, df_val = pd.read_csv("reorganized_full_data.csv"), pd.read_csv(
-        "reorganized_val.csv"
-    )
+    df_train, df_val = pd.read_csv("reorganized_train.csv"), pd.read_csv("val.csv")
     train = d.ImageLabeledDataset(df_train, transform=transform)
+
+    df_val = gen_query_gallery_pairs(df_val)
+    df_gt_val = get_ground_truth(df_val)
+
     val = d.ImageQueryGalleryLabeledDataset(df_val, transform=transform)
 
     optimizer = Adam(model.parameters(), lr=1e-4)
@@ -61,23 +86,20 @@ if __name__ == "__main__":
                 embeddings = model(batch["input_tensors"].to(device))
                 loss = criterion(embeddings, batch["labels"].to(device))
                 loss.backward()
+
+                wandb.log({"train loss": loss.item()})
+
                 optimizer.step()
                 optimizer.zero_grad()
                 pbar.set_postfix(criterion.last_logs)
 
-    def validation():
-        embeddings = inference(model, val, batch_size=64, num_workers=0, verbose=True)
-        rr = RetrievalResults.from_embeddings(embeddings, val, n_items=10)
-        rr = AdaptiveThresholding(n_std=2).process(rr)
-        rr.visualize(query_ids=[2, 1], dataset=val, show=True)
-        results = calc_retrieval_metrics_rr(rr, map_top_k=(10,), cmc_top_k=(1, 5, 10))
-
-        for metric_name in results.keys():
-            for k, v in results[metric_name].items():
-                print(f"{metric_name}@{k}: {v.item()}")
+            embeddings, df_pred_val = val_inference(model, val, df_val)
+            rank_metrics, eer_metric = calc_metrics(
+                embeddings, df_gt_val, df_pred_val, val
+            )
+            print_metrics(rank_metrics, eer_metric)
 
     training()
-    validation()
     torch.save(
         model.state_dict(),
         os.path.join(MODEL_WEIGHTS_SAVE_PATH, f"{model_name}/model.pth"),

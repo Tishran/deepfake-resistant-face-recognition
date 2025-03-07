@@ -28,10 +28,13 @@ def compute_eer(gt_df, sub_df):
     sub_sim_column = "similarity"
     id_column = "pair_id"
 
-    gt_df = gt_df.astype({id_column: int})
-    sub_df = sub_df.astype({id_column: int})
+    # gt_df = gt_df.astype({id_column: int})
+    # sub_df = sub_df.astype({id_column: int})
 
-    gt_df = gt_df.join(sub_df.set_index(id_column), on=id_column, how="left")
+    gt_df = gt_df.rename(columns={"similarity": gt_label_column})
+    gt_df = gt_df.join(
+        sub_df.set_index(id_column), on=id_column, how="left"
+    )
 
     if gt_df[sub_sim_column].isna().any():
         print("Не все `pair_id` присутствуют в сабмите")
@@ -49,7 +52,7 @@ if __name__ == "__main__":
     parser.add_argument("--private_test_url", type=str, required=False)
     parser.add_argument("--private_prediction_url", type=str, required=False)
     args = parser.parse_args()
-    
+
     public_test_df = pd.read_csv(args.public_test_url)
     public_prediction_df = pd.read_csv(args.public_prediction_url)
     public_score = compute_eer(public_test_df, public_prediction_df)
