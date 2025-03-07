@@ -12,7 +12,7 @@ from oml.inference import inference
 from oml.losses import TripletLossWithMiner
 from oml.metrics import calc_retrieval_metrics_rr
 from oml.miners import AllTripletsMiner
-from oml.models import ViTExtractor
+from oml.models import ViTExtractor, ResnetExtractor
 from oml.registry import get_transforms_for_pretrained
 from oml.retrieval import RetrievalResults, AdaptiveThresholding
 from oml.samplers import BalanceSampler
@@ -20,7 +20,7 @@ from oml.samplers import BalanceSampler
 MODEL_WEIGHTS_SAVE_PATH = "./model_weights/"
 
 device = "cuda"
-epochs = 5
+epochs = 3
 
 
 def fix_seed(seed: int):
@@ -35,15 +35,17 @@ def fix_seed(seed: int):
 if __name__ == "__main__":
     fix_seed(seed=42)
 
-    model_name = "vits16_dino"
-    
+    model_name = "resnet18_imagenet1k_v1"
+
     if not os.path.exists(os.path.join(MODEL_WEIGHTS_SAVE_PATH, model_name)):
         os.makedirs(os.path.join(MODEL_WEIGHTS_SAVE_PATH, model_name))
 
-    model = ViTExtractor.from_pretrained(model_name).to(device).train()
+    model = ResnetExtractor.from_pretrained(model_name).to(device).train()
     transform, _ = get_transforms_for_pretrained(model_name)
 
-    df_train, df_val = pd.read_csv("train.csv"), pd.read_csv("val.csv")
+    df_train, df_val = pd.read_csv("reorganized_full_data.csv"), pd.read_csv(
+        "reorganized_val.csv"
+    )
     train = d.ImageLabeledDataset(df_train, transform=transform)
     val = d.ImageQueryGalleryLabeledDataset(df_val, transform=transform)
 

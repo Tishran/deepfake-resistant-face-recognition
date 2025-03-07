@@ -10,7 +10,7 @@ from oml.models import ViTExtractor, ResnetExtractor
 from oml.registry import get_transforms_for_pretrained
 
 
-OUTPUT_PATH = "/kaggle/working/submissions"
+OUTPUT_PATH = "./submissions"
 
 
 def create_sample_sub(pair_ids: List[str], sim_scores: List[float]):
@@ -25,11 +25,11 @@ if __name__ == "__main__":
 
     device = "cuda"
     test_path = "test.csv"
-    oml_registry_model_name = "vits16_dino"
+    oml_registry_model_name = "resnet18_imagenet1k_v1"
 
-    model = ViTExtractor.from_pretrained(oml_registry_model_name)
+    model = ResnetExtractor.from_pretrained(oml_registry_model_name)
     state_dict = torch.load(
-        "./model_weights/vits16_dino/model.pth", map_location="cuda"
+        f"./model_weights/{oml_registry_model_name}/model.pth", map_location="cuda"
     )
     model.load_state_dict(state_dict)
     model = model.to(device).eval()
@@ -48,4 +48,4 @@ if __name__ == "__main__":
     pair_ids = pair_ids[::2]
 
     sub_df = create_sample_sub(pair_ids, sim_scores)
-    sub_df.to_csv(f"{OUTPUT_PATH}/submission.csv", index=False)
+    sub_df.to_csv(f"{OUTPUT_PATH}/submission_with_reorganized.csv", index=False)

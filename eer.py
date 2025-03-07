@@ -6,7 +6,7 @@ import numpy as np
 from sklearn.metrics import roc_curve
 
 
-def compute_eer(label, pred, positive_label=1):
+def _compute_eer(label, pred, positive_label=1):
     # all fpr, tpr, fnr, fnr, threshold are lists (in the format of np.array)
     fpr, tpr, threshold = roc_curve(label, pred)
     fnr = 1 - tpr
@@ -23,13 +23,10 @@ def compute_eer(label, pred, positive_label=1):
     return eer
 
 
-def main(private_test_url, private_prediction_url):
+def compute_eer(gt_df, sub_df):
     gt_label_column = "label"
     sub_sim_column = "similarity"
     id_column = "pair_id"
-
-    sub_df = pd.read_csv(private_prediction_url)
-    gt_df = pd.read_csv(private_test_url)
 
     gt_df = gt_df.astype({id_column: int})
     sub_df = sub_df.astype({id_column: int})
@@ -42,7 +39,7 @@ def main(private_test_url, private_prediction_url):
     y_score = sub_df[sub_sim_column].tolist()
     y_true = gt_df[gt_label_column].tolist()
 
-    return compute_eer(y_true, y_score)
+    return _compute_eer(y_true, y_score)
 
 
 if __name__ == "__main__":
@@ -52,11 +49,16 @@ if __name__ == "__main__":
     parser.add_argument("--private_test_url", type=str, required=False)
     parser.add_argument("--private_prediction_url", type=str, required=False)
     args = parser.parse_args()
-    public_score = main(args.public_test_url, args.public_prediction_url)
+    
+    public_test_df = pd.read_csv(args.public_test_url)
+    public_prediction_df = pd.read_csv(args.public_prediction_url)
+    public_score = compute_eer(public_test_df, public_prediction_df)
 
     private_score = None
     if args.private_test_url and args.private_prediction_url:
-        private_score = main(args.private_test_url, args.private_prediction_url)
+        private_test_df = pd.read_csv(args.private_test_url)
+        private_prediction_df = pd.read_csv(args.private_prediction_url)
+        private_score = compute_eer(private_test_df, private_prediction_df)
 
     print(
         json.dumps(

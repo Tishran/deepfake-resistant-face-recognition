@@ -44,3 +44,4 @@ build/
 Thumbs.db
 
 data
+model_weights
