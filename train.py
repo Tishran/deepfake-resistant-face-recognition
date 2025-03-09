@@ -32,7 +32,7 @@ from validation import (
 MODEL_WEIGHTS_SAVE_PATH = "./model_weights/"
 
 device = "cuda"
-epochs = 3
+epochs = 1
 
 
 def fix_seed(seed: int):
@@ -62,27 +62,14 @@ if __name__ == "__main__":
     if not os.path.exists(os.path.join(MODEL_WEIGHTS_SAVE_PATH, OML_MODEL_NAME)):
         os.makedirs(os.path.join(MODEL_WEIGHTS_SAVE_PATH, OML_MODEL_NAME))
 
-    # model = (
-    #     OML_EXTRACTOR[OML_MODEL_NAME].from_pretrained(OML_MODEL_NAME).to(device).train()
-    # )
-
     model = (
-        ResnetExtractor(
-            weights=None,
-            arch="resnet34",
-            gem_p=None,
-            remove_fc=True,
-            normalise_features=True,
-        )
-        .to(device)
-        .train()
+        OML_EXTRACTOR[OML_MODEL_NAME].from_pretrained(OML_MODEL_NAME).to(device).train()
     )
 
     transform = t.Compose(
         [
             t.Resize(IM_SIZE, interpolation=InterpolationMode.BICUBIC),
             t.CenterCrop(CROP_SIZE),
-            # t.RandomHorizontalFlip(p=0.4),
             t.ToTensor(),
             t.Normalize(mean=MEAN, std=STD),
         ]
@@ -97,10 +84,10 @@ if __name__ == "__main__":
     val = d.ImageQueryGalleryLabeledDataset(df_val, transform=transform)
 
     optimizer = Adam(model.parameters(), lr=1e-4)
-    # criterion = TripletLossWithMiner(0.1, AllTripletsMiner(), need_logs=True)
-    criterion = CosineTripletLossWithMiner(
-        0.1, AllTripletsMiner(), reduction="mean", need_logs=True
-    )
+    criterion = TripletLossWithMiner(0.1, AllTripletsMiner(), need_logs=True)
+    # criterion = CosineTripletLossWithMiner(
+    #     0.1, AllTripletsMiner(), reduction="mean", need_logs=True
+    # )
     sampler = BalanceSampler(train.get_labels(), n_labels=20, n_instances=4)
 
     def training():

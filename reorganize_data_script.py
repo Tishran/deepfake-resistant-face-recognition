@@ -34,6 +34,6 @@ if __name__ == "__main__":
     with open(f"{TRAIN_IMAGES_PATH}/../meta.json", "r") as f:
         fake_indicators = json.load(f)
 
-    train_df = pd.read_csv("val.csv")
+    train_df = pd.read_csv("train.csv")
     train_df = fix_labeling_dataframe(train_df, fake_indicators)
-    train_df.to_csv("reorganized_val.csv", index=False)
+    train_df.to_csv("reorganized_train.csv", index=False)
