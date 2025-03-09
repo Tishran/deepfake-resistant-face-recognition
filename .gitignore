@@ -44,3 +44,8 @@ build/
 Thumbs.db
 
 data
+model_weights
+curr_best_model_weights
+wandb
+submissions
+my_secrets.py

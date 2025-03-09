@@ -1,22 +1,37 @@
+import os
 import random
 import torch
 import numpy as np
 import pandas as pd
+import wandb
 from tqdm import tqdm
 from torch.optim import Adam
 from torch.utils.data import DataLoader
+import torchvision.transforms as t
+from torchvision.transforms import InterpolationMode
+from config import *
 
 from oml import datasets as d
-from oml.inference import inference
 from oml.losses import TripletLossWithMiner
-from oml.metrics import calc_retrieval_metrics_rr
 from oml.miners import AllTripletsMiner
-from oml.models import ViTExtractor
 from oml.registry import get_transforms_for_pretrained
 from oml.retrieval import RetrievalResults, AdaptiveThresholding
 from oml.samplers import BalanceSampler
 
-device = "cpu"
+from my_secrets import WANDB_API_KEY
+
+from loss import CosineTripletLossWithMiner
+from validation import (
+    print_metrics,
+    calc_metrics,
+    val_inference,
+    gen_query_gallery_pairs,
+    get_ground_truth,
+)
+
+MODEL_WEIGHTS_SAVE_PATH = "./model_weights/"
+
+device = "cuda"
 epochs = 1
 
 
@@ -30,18 +45,50 @@ def fix_seed(seed: int):
 
 
 if __name__ == "__main__":
-    fix_seed(seed=0)
+    wandb.login(key=WANDB_API_KEY)
 
-    model = ViTExtractor.from_pretrained("vits16_dino").to(device).train()
-    transform, _ = get_transforms_for_pretrained("vits16_dino")
+    wandb.init(
+        project="Kryptonite_OML",
+        config={
+            "architecture": OML_MODEL_NAME,
+            "epochs": epochs,
+            "optimizer": "Adam",
+            "loss": "TripletLoss",
+        },
+    )
 
-    df_train, df_val = pd.read_csv("train.csv"), pd.read_csv("val.csv")
+    fix_seed(seed=42)
+
+    if not os.path.exists(os.path.join(MODEL_WEIGHTS_SAVE_PATH, OML_MODEL_NAME)):
+        os.makedirs(os.path.join(MODEL_WEIGHTS_SAVE_PATH, OML_MODEL_NAME))
+
+    model = (
+        OML_EXTRACTOR[OML_MODEL_NAME].from_pretrained(OML_MODEL_NAME).to(device).train()
+    )
+
+    transform = t.Compose(
+        [
+            t.Resize(IM_SIZE, interpolation=InterpolationMode.BICUBIC),
+            t.CenterCrop(CROP_SIZE),
+            t.ToTensor(),
+            t.Normalize(mean=MEAN, std=STD),
+        ]
+    )
+
+    df_train, df_val = pd.read_csv("reorganized_train.csv"), pd.read_csv("val.csv")
     train = d.ImageLabeledDataset(df_train, transform=transform)
+
+    df_val = gen_query_gallery_pairs(df_val)
+    df_gt_val = get_ground_truth(df_val)
+
     val = d.ImageQueryGalleryLabeledDataset(df_val, transform=transform)
 
     optimizer = Adam(model.parameters(), lr=1e-4)
     criterion = TripletLossWithMiner(0.1, AllTripletsMiner(), need_logs=True)
-    sampler = BalanceSampler(train.get_labels(), n_labels=16, n_instances=4)
+    # criterion = CosineTripletLossWithMiner(
+    #     0.1, AllTripletsMiner(), reduction="mean", need_logs=True
+    # )
+    sampler = BalanceSampler(train.get_labels(), n_labels=20, n_instances=4)
 
     def training():
         for epoch in range(epochs):
@@ -51,21 +98,21 @@ if __name__ == "__main__":
                 embeddings = model(batch["input_tensors"].to(device))
                 loss = criterion(embeddings, batch["labels"].to(device))
                 loss.backward()
+
+                wandb.log({"train loss": loss.item()})
+
                 optimizer.step()
                 optimizer.zero_grad()
                 pbar.set_postfix(criterion.last_logs)
 
-    def validation():
-        embeddings = inference(model, val, batch_size=32, num_workers=0, verbose=True)
-        rr = RetrievalResults.from_embeddings(embeddings, val, n_items=10)
-        rr = AdaptiveThresholding(n_std=2).process(rr)
-        rr.visualize(query_ids=[2, 1], dataset=val, show=True)
-        results = calc_retrieval_metrics_rr(rr, map_top_k=(10,), cmc_top_k=(1, 5, 10))
-
-        for metric_name in results.keys():
-            for k, v in results[metric_name].items():
-                print(f"{metric_name}@{k}: {v.item()}")
+            embeddings, df_pred_val = val_inference(model, val, df_val)
+            rank_metrics, eer_metric = calc_metrics(
+                embeddings, df_gt_val, df_pred_val, val
+            )
+            print_metrics(rank_metrics, eer_metric)
 
     training()
-    validation()
-    torch.save(model.state_dict(), "model.pth")
+    torch.save(
+        model.state_dict(),
+        os.path.join(MODEL_WEIGHTS_SAVE_PATH, f"{OML_MODEL_NAME}/model.pth"),
+    )
