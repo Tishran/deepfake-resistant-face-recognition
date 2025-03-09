@@ -32,7 +32,7 @@ from validation import (
 MODEL_WEIGHTS_SAVE_PATH = "./model_weights/"
 
 device = "cuda"
-epochs = 1
+epochs = 3
 
 
 def fix_seed(seed: int):
@@ -62,8 +62,20 @@ if __name__ == "__main__":
     if not os.path.exists(os.path.join(MODEL_WEIGHTS_SAVE_PATH, OML_MODEL_NAME)):
         os.makedirs(os.path.join(MODEL_WEIGHTS_SAVE_PATH, OML_MODEL_NAME))
 
+    # model = (
+    #     OML_EXTRACTOR[OML_MODEL_NAME].from_pretrained(OML_MODEL_NAME).to(device).train()
+    # )
+
     model = (
-        OML_EXTRACTOR[OML_MODEL_NAME].from_pretrained(OML_MODEL_NAME).to(device).train()
+        ResnetExtractor(
+            weights=None,
+            arch="resnet34",
+            gem_p=None,
+            remove_fc=True,
+            normalise_features=True,
+        )
+        .to(device)
+        .train()
     )
 
     transform = t.Compose(
@@ -87,7 +99,7 @@ if __name__ == "__main__":
     optimizer = Adam(model.parameters(), lr=1e-4)
     # criterion = TripletLossWithMiner(0.1, AllTripletsMiner(), need_logs=True)
     criterion = CosineTripletLossWithMiner(
-        0.1, AllTripletsMiner(), reduction="sum", need_logs=True
+        0.1, AllTripletsMiner(), reduction="mean", need_logs=True
     )
     sampler = BalanceSampler(train.get_labels(), n_labels=20, n_instances=4)
 

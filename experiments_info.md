@@ -18,7 +18,7 @@ OML lib seems interesing, gonna keep exploring it
 conlusion: maybe ViT model overfits more on train dataset than resnet
 futher experiments will run on balance sampler with n_labels=20 and n_instances=4
 
-2. reorganized data (dropped rows that are unique in their classes) - it gave 0.0571 EER on public with resnet18_imagenet1k_v1 (other things are from baseline)
+2. reorganized data (dropped rows that are unique in their classes) - it gave 0.00571 EER on public with resnet34_imagenet1k_v1 (other things are from baseline)
 
 3. Augmentations:
 Added them consiquently (all using best model - see below)
@@ -27,8 +27,10 @@ Added them consiquently (all using best model - see below)
 4. Losses:
 (all run on best model - see below)
 * SoftTripletLoss - 0.0058 eer on val
-* CosineTripletLoss (reduction "mean") - 0.00849980514814729 eer on val, 0.006 on test
-* CosineTripletLoss (reduction "mean") - 0.007050144767020873 eer on val
+* CosineTripletLoss (reduction "mean") - 0.00849980514814729 eer on val, 0.06 on test
+* CosineTripletLoss (reduction "sum") - 0.007050144767020873 eer on val
+* CosineTripletLoss (reduction "mean", 0.5 margin) - 
+0.0033002854416878573 eer on val, 0.0528 on test
 
 NOTE: correleation between val and test EER metrics seems to exist :)
 
