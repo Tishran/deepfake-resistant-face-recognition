@@ -97,7 +97,7 @@ def val_inference(model, data, df):
 def calc_metrics(embeddings, gt_df, sub_df, data):
     rr = RetrievalResults.from_embeddings(embeddings, data, n_items=10)
     rr = AdaptiveThresholding(n_std=2).process(rr)
-    rr.visualize(query_ids=[2, 1], dataset=data, show=True)
+    rr.visualize(query_ids=[10, 15, 20, 25], dataset=data, show=True)
     rank_metrics = calc_retrieval_metrics_rr(rr, map_top_k=(10,), cmc_top_k=(1, 5, 10))
 
     eer_metric = compute_eer(gt_df, sub_df)
@@ -111,18 +111,3 @@ def print_metrics(rank_metrics, eer_metric):
     for metric_name in rank_metrics.keys():
         for k, v in rank_metrics[metric_name].items():
             print(f"{metric_name}@{k}: {v.item()}")
-
-
-# if __name__ == "__main__":
-#     model = ViTExtractor.from_pretrained("vits16_dino")
-#     state_dict = torch.load("model.pth", map_location="cpu")
-#     model.load_state_dict(state_dict)
-#     model = model.to(device).eval()
-
-#     transform, _ = get_transforms_for_pretrained("vits16_dino")
-
-#     df_test = pd.read_csv("val.csv")
-#     df_test = gen_query_gallery_pairs(df_test)
-#     test = d.ImageQueryGalleryLabeledDataset(df_test, transform=transform)
-
-#     predict()

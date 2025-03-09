@@ -5,6 +5,7 @@ import pandas as pd
 from torch.nn import functional as F
 from oml import datasets as d
 from oml.inference import inference
+from config import OML_MODEL_NAME, OML_EXTRACTOR
 
 from oml.models import ViTExtractor, ResnetExtractor
 from oml.registry import get_transforms_for_pretrained
@@ -19,22 +20,21 @@ def create_sample_sub(pair_ids: List[str], sim_scores: List[float]):
     return pd.DataFrame({id_column: pair_ids, sub_sim_column: sim_scores})
 
 
-if __name__ == "__main__":
+def make_submission():
     if not os.path.exists(OUTPUT_PATH):
         os.makedirs(OUTPUT_PATH)
 
     device = "cuda"
     test_path = "test.csv"
-    oml_registry_model_name = "resnet18_imagenet1k_v1"
 
-    model = ResnetExtractor.from_pretrained(oml_registry_model_name)
+    model = OML_EXTRACTOR[OML_MODEL_NAME].from_pretrained(OML_MODEL_NAME)
     state_dict = torch.load(
-        f"./model_weights/{oml_registry_model_name}/model.pth", map_location="cuda"
+        f"./model_weights/{OML_MODEL_NAME}/model.pth", map_location="cuda"
     )
     model.load_state_dict(state_dict)
     model = model.to(device).eval()
 
-    transform, _ = get_transforms_for_pretrained(oml_registry_model_name)
+    transform, _ = get_transforms_for_pretrained(OML_MODEL_NAME)
 
     df_test = pd.read_csv(test_path)
     test = d.ImageQueryGalleryLabeledDataset(df_test, transform=transform)
@@ -48,4 +48,8 @@ if __name__ == "__main__":
     pair_ids = pair_ids[::2]
 
     sub_df = create_sample_sub(pair_ids, sim_scores)
-    sub_df.to_csv(f"{OUTPUT_PATH}/submission_with_reorganized.csv", index=False)
+    sub_df.to_csv(f"{OUTPUT_PATH}/cosine_triplet_loss_mean.csv", index=False)
+
+
+if __name__ == "__main__":
+    make_submission()

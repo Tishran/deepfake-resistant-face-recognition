@@ -7,17 +7,20 @@ import wandb
 from tqdm import tqdm
 from torch.optim import Adam
 from torch.utils.data import DataLoader
+import torchvision.transforms as t
+from torchvision.transforms import InterpolationMode
+from config import *
 
 from oml import datasets as d
-from oml.inference import inference
 from oml.losses import TripletLossWithMiner
-from oml.metrics import calc_retrieval_metrics_rr
 from oml.miners import AllTripletsMiner
-from oml.models import ViTExtractor, ResnetExtractor
 from oml.registry import get_transforms_for_pretrained
 from oml.retrieval import RetrievalResults, AdaptiveThresholding
 from oml.samplers import BalanceSampler
 
+from my_secrets import WANDB_API_KEY
+
+from loss import CosineTripletLossWithMiner
 from validation import (
     print_metrics,
     calc_metrics,
@@ -42,14 +45,12 @@ def fix_seed(seed: int):
 
 
 if __name__ == "__main__":
-    # TODO: CLEAR THIS OFF, and for the next time turn on kaggle secrets
-    wandb_api_key = ""
-    wandb.login(key=wandb_api_key)
+    wandb.login(key=WANDB_API_KEY)
 
     wandb.init(
         project="Kryptonite_OML",
         config={
-            "architecture": "resnet18_imagenet1k_v1",
+            "architecture": OML_MODEL_NAME,
             "epochs": epochs,
             "optimizer": "Adam",
             "loss": "TripletLoss",
@@ -58,13 +59,22 @@ if __name__ == "__main__":
 
     fix_seed(seed=42)
 
-    model_name = "resnet18_imagenet1k_v1"
+    if not os.path.exists(os.path.join(MODEL_WEIGHTS_SAVE_PATH, OML_MODEL_NAME)):
+        os.makedirs(os.path.join(MODEL_WEIGHTS_SAVE_PATH, OML_MODEL_NAME))
 
-    if not os.path.exists(os.path.join(MODEL_WEIGHTS_SAVE_PATH, model_name)):
-        os.makedirs(os.path.join(MODEL_WEIGHTS_SAVE_PATH, model_name))
+    model = (
+        OML_EXTRACTOR[OML_MODEL_NAME].from_pretrained(OML_MODEL_NAME).to(device).train()
+    )
 
-    model = ResnetExtractor.from_pretrained(model_name).to(device).train()
-    transform, _ = get_transforms_for_pretrained(model_name)
+    transform = t.Compose(
+        [
+            t.Resize(IM_SIZE, interpolation=InterpolationMode.BICUBIC),
+            t.CenterCrop(CROP_SIZE),
+            # t.RandomHorizontalFlip(p=0.4),
+            t.ToTensor(),
+            t.Normalize(mean=MEAN, std=STD),
+        ]
+    )
 
     df_train, df_val = pd.read_csv("reorganized_train.csv"), pd.read_csv("val.csv")
     train = d.ImageLabeledDataset(df_train, transform=transform)
@@ -75,8 +85,11 @@ if __name__ == "__main__":
     val = d.ImageQueryGalleryLabeledDataset(df_val, transform=transform)
 
     optimizer = Adam(model.parameters(), lr=1e-4)
-    criterion = TripletLossWithMiner(0.1, AllTripletsMiner(), need_logs=True)
-    sampler = BalanceSampler(train.get_labels(), n_labels=16, n_instances=4)
+    # criterion = TripletLossWithMiner(0.1, AllTripletsMiner(), need_logs=True)
+    criterion = CosineTripletLossWithMiner(
+        0.1, AllTripletsMiner(), reduction="sum", need_logs=True
+    )
+    sampler = BalanceSampler(train.get_labels(), n_labels=20, n_instances=4)
 
     def training():
         for epoch in range(epochs):
@@ -102,5 +115,5 @@ if __name__ == "__main__":
     training()
     torch.save(
         model.state_dict(),
-        os.path.join(MODEL_WEIGHTS_SAVE_PATH, f"{model_name}/model.pth"),
+        os.path.join(MODEL_WEIGHTS_SAVE_PATH, f"{OML_MODEL_NAME}/model.pth"),
     )
