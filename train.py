@@ -10,17 +10,13 @@ from torch.utils.data import DataLoader
 import torchvision.transforms as t
 from torchvision.transforms import InterpolationMode
 from config import *
+from dotenv import load_dotenv
 
 from oml import datasets as d
 from oml.losses import TripletLossWithMiner
 from oml.miners import AllTripletsMiner
-from oml.registry import get_transforms_for_pretrained
-from oml.retrieval import RetrievalResults, AdaptiveThresholding
 from oml.samplers import BalanceSampler
 
-from my_secrets import WANDB_API_KEY
-
-from loss import CosineTripletLossWithMiner
 from validation import (
     print_metrics,
     calc_metrics,
@@ -29,10 +25,18 @@ from validation import (
     get_ground_truth,
 )
 
-MODEL_WEIGHTS_SAVE_PATH = "./model_weights/"
+load_dotenv()
 
-device = "cuda"
-epochs = 1
+MODEL_WEIGHTS_SAVE_PATH = "./model_weights/"
+WANDB_API_KEY = os.getenv("WANDB_API_KEY")
+
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+IMG_SIZE = 256
+CROP_SIZE = 224
+MEAN = [0.485, 0.456, 0.406]
+STD = [0.229, 0.224, 0.225]
+
+epochs = 2
 
 
 def fix_seed(seed: int):
@@ -47,35 +51,31 @@ def fix_seed(seed: int):
 if __name__ == "__main__":
     wandb.login(key=WANDB_API_KEY)
 
-    wandb.init(
-        project="Kryptonite_OML",
-        config={
-            "architecture": OML_MODEL_NAME,
-            "epochs": epochs,
-            "optimizer": "Adam",
-            "loss": "TripletLoss",
-        },
-    )
-
     fix_seed(seed=42)
 
-    if not os.path.exists(os.path.join(MODEL_WEIGHTS_SAVE_PATH, OML_MODEL_NAME)):
+    if not os.path.exists(
+        os.path.join(MODEL_WEIGHTS_SAVE_PATH, OML_MODEL_NAME)
+    ):
         os.makedirs(os.path.join(MODEL_WEIGHTS_SAVE_PATH, OML_MODEL_NAME))
 
     model = (
-        OML_EXTRACTOR[OML_MODEL_NAME].from_pretrained(OML_MODEL_NAME).to(device).train()
+        OML_EXTRACTOR[OML_MODEL_NAME]
+        .from_pretrained(OML_MODEL_NAME)
+        .to(DEVICE)
+        .train()
     )
 
     transform = t.Compose(
         [
-            t.Resize(IM_SIZE, interpolation=InterpolationMode.BICUBIC),
+            t.Resize(IMG_SIZE, interpolation=InterpolationMode.BICUBIC),
             t.CenterCrop(CROP_SIZE),
             t.ToTensor(),
             t.Normalize(mean=MEAN, std=STD),
         ]
     )
 
-    df_train, df_val = pd.read_csv("reorganized_train.csv"), pd.read_csv("val.csv")
+    df_train = pd.read_csv("./data_csv/reorganized_train.csv")
+    df_val = pd.read_csv("./data_csv/val.csv")
     train = d.ImageLabeledDataset(df_train, transform=transform)
 
     df_val = gen_query_gallery_pairs(df_val)
@@ -85,18 +85,27 @@ if __name__ == "__main__":
 
     optimizer = Adam(model.parameters(), lr=1e-4)
     criterion = TripletLossWithMiner(0.1, AllTripletsMiner(), need_logs=True)
-    # criterion = CosineTripletLossWithMiner(
-    #     0.1, AllTripletsMiner(), reduction="mean", need_logs=True
-    # )
     sampler = BalanceSampler(train.get_labels(), n_labels=20, n_instances=4)
+
+    # wandb init
+    wandb.init(
+        project="Kryptonite_ML_Challenge",
+        config={
+            "architecture": OML_MODEL_NAME,
+            "epochs": epochs,
+            "optimizer": optimizer.__class__.__name__,
+            "loss": criterion.__class__.__name__,
+        },
+    )
+    # wandb init
 
     def training():
         for epoch in range(epochs):
             pbar = tqdm(DataLoader(train, batch_sampler=sampler))
             pbar.set_description(f"epoch: {epoch}/{epochs}")
             for batch in pbar:
-                embeddings = model(batch["input_tensors"].to(device))
-                loss = criterion(embeddings, batch["labels"].to(device))
+                embeddings = model(batch["input_tensors"].to(DEVICE))
+                loss = criterion(embeddings, batch["labels"].to(DEVICE))
                 loss.backward()
 
                 wandb.log({"train loss": loss.item()})
@@ -106,10 +115,11 @@ if __name__ == "__main__":
                 pbar.set_postfix(criterion.last_logs)
 
             embeddings, df_pred_val = val_inference(model, val, df_val)
-            rank_metrics, eer_metric = calc_metrics(
-                embeddings, df_gt_val, df_pred_val, val
-            )
-            print_metrics(rank_metrics, eer_metric)
+            rank_metrics = calc_metrics(embeddings, df_gt_val, df_pred_val, val)
+
+            wandb.log(rank_metrics)
+
+            print_metrics(rank_metrics)
 
     training()
     torch.save(

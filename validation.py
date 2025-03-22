@@ -8,14 +8,12 @@ from oml import datasets as d
 from oml.inference import inference
 from oml.metrics import calc_retrieval_metrics_rr
 
-from oml.models import ViTExtractor
-from oml.registry import get_transforms_for_pretrained
 from oml.retrieval import RetrievalResults, AdaptiveThresholding
 
 from eer import compute_eer
 from make_submission import create_sample_sub
 
-device = "cuda"
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 def gen_pair_ids(ids):
@@ -74,14 +72,18 @@ def gen_query_gallery_pairs(df):
     paired_df = paired_df[
         ["pair_id", "label", "path", "split", "is_query", "is_gallery"]
     ]
-    paired_df = paired_df.sort_values(["pair_id", "is_query"], ascending=[True, False])
+    paired_df = paired_df.sort_values(
+        ["pair_id", "is_query"], ascending=[True, False]
+    )
     paired_df = paired_df.drop(columns="pair_id").reset_index(drop=True)
 
     return paired_df
 
 
 def val_inference(model, data, df):
-    embeddings = inference(model, data, batch_size=512, num_workers=6, verbose=True)
+    embeddings = inference(
+        model, data, batch_size=512, num_workers=6, verbose=True
+    )
     e1 = embeddings[::2]
     e2 = embeddings[1::2]
     sim_scores = F.cosine_similarity(e1, e2).detach().cpu().numpy()
@@ -94,20 +96,26 @@ def val_inference(model, data, df):
     return embeddings, sub_df
 
 
-def calc_metrics(embeddings, gt_df, sub_df, data):
+def calc_metrics(embeddings, gt_df, sub_df, data, tag="val"):
     rr = RetrievalResults.from_embeddings(embeddings, data, n_items=10)
     rr = AdaptiveThresholding(n_std=2).process(rr)
     rr.visualize(query_ids=[10, 15, 20, 25], dataset=data, show=True)
-    rank_metrics = calc_retrieval_metrics_rr(rr, map_top_k=(10,), cmc_top_k=(1, 5, 10))
+    rank_metrics = calc_retrieval_metrics_rr(
+        rr, map_top_k=(10,), cmc_top_k=(1, 5, 10)
+    )
 
     eer_metric = compute_eer(gt_df, sub_df)
 
-    return rank_metrics, eer_metric
-
-
-def print_metrics(rank_metrics, eer_metric):
-    print(f"EER: {eer_metric}")
-
+    rank_metrics_dict = {}
     for metric_name in rank_metrics.keys():
         for k, v in rank_metrics[metric_name].items():
-            print(f"{metric_name}@{k}: {v.item()}")
+            rank_metrics_dict[f"{tag}_{metric_name}_{k}"] = v.item()
+
+    rank_metrics_dict[f"{tag}_eer"] = eer_metric
+
+    return rank_metrics_dict
+
+
+def print_metrics(rank_metrics):
+    for k, v in rank_metrics.items():
+        print(f"{k}: {v}")

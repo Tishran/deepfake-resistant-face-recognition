@@ -1,7 +1,6 @@
 import json
 import os
 import pandas as pd
-import shutil
 
 TRAIN_IMAGES_PATH = "data/train/images"
 

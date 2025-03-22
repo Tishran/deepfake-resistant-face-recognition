@@ -28,13 +28,8 @@ def compute_eer(gt_df, sub_df):
     sub_sim_column = "similarity"
     id_column = "pair_id"
 
-    # gt_df = gt_df.astype({id_column: int})
-    # sub_df = sub_df.astype({id_column: int})
-
     gt_df = gt_df.rename(columns={"similarity": gt_label_column})
-    gt_df = gt_df.join(
-        sub_df.set_index(id_column), on=id_column, how="left"
-    )
+    gt_df = gt_df.join(sub_df.set_index(id_column), on=id_column, how="left")
 
     if gt_df[sub_sim_column].isna().any():
         print("Не все `pair_id` присутствуют в сабмите")
