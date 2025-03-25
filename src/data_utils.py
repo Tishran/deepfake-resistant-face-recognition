@@ -1,22 +1,34 @@
-import torch
-import pandas as pd
+"""
+data_utils.py
+-------------
+
+Utilities for data preprocessing and ground truth generation.
+
+Functions:
+    - gen_pair_ids: Generates unique pair identifiers based on the input list of identifiers.
+    - get_ground_truth: Constructs the ground truth using fake indicators from a metadata JSON file.
+    - gen_query_gallery_pairs: Creates query-gallery pairs of dataset.
+"""
+
 import json
+import pandas as pd
 
 from collections import defaultdict
-from torch.nn import functional as F
-from oml import datasets as d
-from oml.inference import inference
-from oml.metrics import calc_retrieval_metrics_rr
 
-from oml.retrieval import RetrievalResults, AdaptiveThresholding
-
-from eer import compute_eer
-from make_submission import create_sample_sub
-
-DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+from src.inference import create_sample_sub
 
 
 def gen_pair_ids(ids):
+    """
+    Generates unique pair identifiers based on the input list of identifiers.
+
+    Parameters:
+        ids (iterable): A list of identifiers.
+
+    Returns:
+        list: A list of unique pair IDs.
+    """
+
     ids_set = defaultdict(int)
 
     pair_ids = list()
@@ -28,9 +40,20 @@ def gen_pair_ids(ids):
 
 
 def get_ground_truth(df):
+    """
+    Constructs the ground truth for validation using fake indicators from a metadata JSON file.
+
+    Parameters:
+        df (DataFrame): DataFrame containing image paths and labels.
+
+    Returns:
+        DataFrame: A submission DataFrame with pair IDs and binary similarity scores.
+    """
+
     with open(f"./data/train/meta.json", "r") as f:
         fake_indicators = json.load(f)
 
+    # Extract image paths (using the last two segments of the path)
     paths = df["path"].apply(lambda x: "/".join(x.split("/")[-2:])).to_list()
     sim_scores = list()
     for i in range(0, len(paths) - 1, 2):
@@ -45,6 +68,16 @@ def get_ground_truth(df):
 
 
 def gen_query_gallery_pairs(df):
+    """
+    Creates query-gallery pairs of dataset.
+
+    Parameters:
+        df (DataFrame): DataFrame containing information on image paths, labels, and query/gallery flags.
+
+    Returns:
+        DataFrame: A DataFrame with merged query-gallery pairs.
+    """
+
     split_val = df.loc[0, "split"]
     queries = df[df["is_query"]][["label", "path"]]
     galleries = df[df["is_gallery"]][["label", "path"]]
@@ -78,44 +111,3 @@ def gen_query_gallery_pairs(df):
     paired_df = paired_df.drop(columns="pair_id").reset_index(drop=True)
 
     return paired_df
-
-
-def val_inference(model, data, df):
-    embeddings = inference(
-        model, data, batch_size=512, num_workers=6, verbose=True
-    )
-    e1 = embeddings[::2]
-    e2 = embeddings[1::2]
-    sim_scores = F.cosine_similarity(e1, e2).detach().cpu().numpy()
-
-    pair_ids = df["label"].to_list()[::2]
-    pair_ids = gen_pair_ids(pair_ids)
-
-    sub_df = create_sample_sub(pair_ids, sim_scores)
-
-    return embeddings, sub_df
-
-
-def calc_metrics(embeddings, gt_df, sub_df, data, tag="val"):
-    rr = RetrievalResults.from_embeddings(embeddings, data, n_items=10)
-    rr = AdaptiveThresholding(n_std=2).process(rr)
-    rr.visualize(query_ids=[10, 15, 20, 25], dataset=data, show=True)
-    rank_metrics = calc_retrieval_metrics_rr(
-        rr, map_top_k=(10,), cmc_top_k=(1, 5, 10)
-    )
-
-    eer_metric = compute_eer(gt_df, sub_df)
-
-    rank_metrics_dict = {}
-    for metric_name in rank_metrics.keys():
-        for k, v in rank_metrics[metric_name].items():
-            rank_metrics_dict[f"{tag}_{metric_name}_{k}"] = v.item()
-
-    rank_metrics_dict[f"{tag}_eer"] = eer_metric
-
-    return rank_metrics_dict
-
-
-def print_metrics(rank_metrics):
-    for k, v in rank_metrics.items():
-        print(f"{k}: {v}")

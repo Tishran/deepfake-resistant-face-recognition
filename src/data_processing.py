@@ -1,3 +1,13 @@
+"""
+data_processing.py
+-------------
+
+Processes training data to adjust labels for fake samples and filter invalid classes.
+
+Functions:
+    - fix_labeling_dataframe: Adjusts labels for fake samples and removes singleton classes.
+"""
+
 import json
 import os
 import pandas as pd
@@ -6,10 +16,19 @@ TRAIN_IMAGES_PATH = "data/train/images"
 
 
 def fix_labeling_dataframe(dataframe, fake_indicators):
-    def gen_new_path(path):
-        splitted_path = path.split("/")
-        splitted_path[-2] = f"{splitted_path[-2]}_fake"
-        return "/".join(splitted_path)
+    """
+    Adjusts labels for fake samples and removes classes with only one instance.
+
+    Parameters:
+        dataframe (pd.DataFrame): Input DataFrame with columns ["path", "label"].
+        fake_indicators (dict): Dictionary mapping image paths (relative to TRAIN_IMAGES_PATH)
+                                to boolean values indicating if they are fake (e.g., {"image.jpg": True}).
+
+    Returns:
+        pd.DataFrame: Processed DataFrame with:
+                      - Fake samples assigned new labels (original_label + max_label + 1)
+                      - Singleton classes (only one sample) removed
+    """
 
     def fix_df_func(df, max_label):
         df.loc[df["path"].isin(fakes_set), "label"] = df[

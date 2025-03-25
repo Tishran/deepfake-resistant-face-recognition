@@ -43,7 +43,6 @@ build/
 # Windows
 Thumbs.db
 
-data
-model_weights
+data/train
+data/test_public
 wandb
-submissions
