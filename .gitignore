@@ -43,9 +43,6 @@ build/
 # Windows
 Thumbs.db
 
-data
-model_weights
-curr_best_model_weights
+data/train
+data/test_public
 wandb
-submissions
-my_secrets.py

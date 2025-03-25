@@ -1,6 +1,6 @@
 #!/bin/bash
 
-mkdir ./data
+mkdir -p ./data
 cd ./data
 
 wget https://storage.codenrock.com/companies/codenrock-13/contests/kryptonite-ml-challenge/train.zip
