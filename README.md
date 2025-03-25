@@ -97,7 +97,7 @@ Preprocessing steps included resizing images to $224 \times 224$, data augmentat
 The solution leverages a hybrid architecture combining:
 
 1. **Resnet 34**: For feature extraction from facial images.
-2. **Triple Loss**: To improve face matching capabilities.
+2. **Triplet Loss**: To improve face matching capabilities.
 
 The architecture ensures high performance while maintaining low computational overhead.
 
